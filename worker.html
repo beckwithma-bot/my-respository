@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>TaskFlow — My Tasks</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Header -->
+<header class="app-header">
+  <div>
+    <div style="font-weight:700;font-size:1.05rem" id="worker-name">Loading…</div>
+    <div style="font-size:.78rem;color:var(--muted)" id="today-date"></div>
+  </div>
+  <button class="btn-ghost btn-sm" id="sign-out-btn">Sign out</button>
+</header>
+
+<!-- Main -->
+<main class="main worker-main">
+
+  <!-- Active tasks -->
+  <section>
+    <h2 class="section-title">
+      Today's Tasks
+      <span class="count-pill" id="active-count">0</span>
+    </h2>
+    <div id="active-tasks">
+      <div class="spinner-wrap"><div class="spinner"></div></div>
+    </div>
+  </section>
+
+  <!-- Completed tasks -->
+  <section id="done-section" style="margin-top:2rem;display:none">
+    <h2 class="section-title" style="color:var(--muted)">
+      Completed
+      <span class="count-pill" id="done-count">0</span>
+    </h2>
+    <div id="done-tasks"></div>
+  </section>
+
+  <!-- Inventory logger -->
+  <section class="inv-logger">
+    <div class="task-card" style="border-radius:var(--r)">
+      <div class="task-header" onclick="toggleLogger()" style="cursor:pointer">
+        <span style="font-weight:700">📦 Log Inventory Usage</span>
+        <span class="task-chev" id="logger-chev">▼</span>
+      </div>
+      <div class="task-body" id="logger-body">
+        <div id="inv-msg" class="msg-success" style="margin-top:1rem"></div>
+        <form id="inv-form" style="margin-top:1rem">
+          <div class="form-group">
+            <label for="inv-item">Item</label>
+            <select id="inv-item" required>
+              <option value="">Select an item…</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="inv-qty">Quantity Used <span id="unit-hint" style="color:var(--muted)"></span></label>
+            <input type="number" id="inv-qty" placeholder="0" min="0.01" step="any" required>
+          </div>
+          <button type="submit" class="btn-accent" id="inv-submit" style="width:100%">Log Usage</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="app.js"></script>
+<script>
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db   = firebase.firestore();
+
+  let currentUser  = null;
+  let userData     = null;
+  let allTasks     = [];
+  let inventory    = [];
+
+  // ── Auth guard ──────────────────────────────────────────────────────────────
+  auth.onAuthStateChanged(async user => {
+    if (!user) { location.href = 'index.html'; return; }
+    const snap = await db.collection('users').doc(user.uid).get();
+    if (!snap.exists) { location.href = 'index.html'; return; }
+    userData = snap.data();
+    if (userData.role === 'owner') { location.href = 'owner.html'; return; }
+    currentUser = user;
+    init();
+  });
+
+  // ── Init ────────────────────────────────────────────────────────────────────
+  function init() {
+    document.getElementById('worker-name').textContent = userData.workerName || currentUser.email;
+    document.getElementById('today-date').textContent  =
+      new Date().toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
+
+    document.getElementById('sign-out-btn').onclick = () =>
+      auth.signOut().then(() => location.href = 'index.html');
+
+    // Tasks listener
+    db.collection('tasks')
+      .where('assignedWorker', '==', currentUser.uid)
+      .orderBy('dueDate', 'asc')
+      .onSnapshot(snap => {
+        allTasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderTasks();
+      }, err => {
+        document.getElementById('active-tasks').innerHTML =
+          '<p style="color:var(--red);padding:1rem">Failed to load tasks. Check console for index link.</p>';
+        console.error(err);
+      });
+
+    // Inventory listener
+    db.collection('inventory').orderBy('name', 'asc').onSnapshot(snap => {
+      inventory = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      refreshDropdown();
+    });
+
+    // Inventory form
+    document.getElementById('inv-form').addEventListener('submit', handleInvSubmit);
+    document.getElementById('inv-item').addEventListener('change', updateUnitHint);
+  }
+
+  // ── Render tasks ─────────────────────────────────────────────────────────────
+  function renderTasks() {
+    const now    = new Date();
+    const active = allTasks.filter(t => t.status !== 'completed');
+    const done   = allTasks.filter(t => t.status === 'completed');
+
+    document.getElementById('active-count').textContent = active.length;
+
+    document.getElementById('active-tasks').innerHTML = active.length
+      ? active.map(t => taskCardHTML(t, now)).join('')
+      : '<div class="empty-state"><div class="empty-icon">✅</div><div>All caught up! No active tasks.</div></div>';
+
+    if (done.length) {
+      document.getElementById('done-section').style.display = 'block';
+      document.getElementById('done-count').textContent = done.length;
+      document.getElementById('done-tasks').innerHTML   = done.map(t => taskCardHTML(t, now)).join('');
+    } else {
+      document.getElementById('done-section').style.display = 'none';
+    }
+  }
+
+  function taskCardHTML(task, now) {
+    const overdue = task.status !== 'completed' && new Date(task.dueDate) < now;
+    const isDone  = task.status === 'completed';
+    const doneAt  = isDone && task.completedAt ? ' · ' + fmtDate(task.completedAt) : '';
+    return `
+      <div class="task-card ${overdue ? 'overdue' : ''} ${isDone ? 'done-card' : ''}" data-id="${task.id}">
+        <div class="task-header" onclick="toggleTask('${task.id}')">
+          <div style="flex:1;min-width:0">
+            <div class="task-title-row">
+              <span class="task-title">${esc(task.title)}</span>
+              <span class="badge badge-${task.priority}">${task.priority}</span>
+              <span class="badge badge-${task.status}">${task.status}</span>
+              ${overdue ? '<span class="badge badge-high">overdue</span>' : ''}
+            </div>
+            <div class="task-due">Due: ${fmtDate(task.dueDate)}</div>
+          </div>
+          <span class="task-chev" id="chev-${task.id}">▼</span>
+        </div>
+        <div class="task-body" id="body-${task.id}">
+          <p>${esc(task.description || 'No description provided.')}</p>
+          <div class="task-actions">
+            ${task.status === 'pending'
+              ? `<button class="btn-ghost" onclick="handleAck('${task.id}')">Acknowledge</button>` : ''}
+            ${!isDone
+              ? `<button class="btn-accent" onclick="handleComplete('${task.id}', \`${esc(task.title).replace(/`/g,'\\`')}\`)">Mark Complete</button>`
+              : `<span class="done-text">✓ Completed${doneAt}</span>`}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // ── Task interactions ────────────────────────────────────────────────────────
+  function toggleTask(id) {
+    const body  = document.getElementById('body-' + id);
+    const chev  = document.getElementById('chev-' + id);
+    body.classList.toggle('open');
+    if (chev) chev.textContent = body.classList.contains('open') ? '▲' : '▼';
+  }
+
+  async function handleAck(id) {
+    const btn = document.querySelector(`[data-id="${id}"] .btn-ghost`);
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    await db.collection('tasks').doc(id).update({
+      status: 'acknowledged',
+      acknowledgedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    await logActivity('task_acknowledged', 'Acknowledged task ' + id);
+  }
+
+  async function handleComplete(id, title) {
+    const btn = document.querySelector(`[data-id="${id}"] .btn-accent`);
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    await db.collection('tasks').doc(id).update({
+      status: 'completed',
+      completedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    await logActivity('task_completed', 'Completed task: ' + title);
+  }
+
+  // ── Inventory ────────────────────────────────────────────────────────────────
+  function toggleLogger() {
+    const body = document.getElementById('logger-body');
+    const chev = document.getElementById('logger-chev');
+    body.classList.toggle('open');
+    chev.textContent = body.classList.contains('open') ? '▲' : '▼';
+  }
+
+  function refreshDropdown() {
+    const sel  = document.getElementById('inv-item');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">Select an item…</option>' +
+      inventory.map(i =>
+        `<option value="${i.id}">${esc(i.name)} (${i.currentQuantity} ${esc(i.unit)} left)</option>`
+      ).join('');
+    if (prev) sel.value = prev;
+    updateUnitHint();
+  }
+
+  function updateUnitHint() {
+    const id   = document.getElementById('inv-item').value;
+    const item = inventory.find(i => i.id === id);
+    document.getElementById('unit-hint').textContent = item ? `(${item.unit})` : '';
+  }
+
+  async function handleInvSubmit(e) {
+    e.preventDefault();
+    const id   = document.getElementById('inv-item').value;
+    const qty  = parseFloat(document.getElementById('inv-qty').value);
+    const item = inventory.find(i => i.id === id);
+    if (!item || isNaN(qty) || qty <= 0) return;
+
+    const btn = document.getElementById('inv-submit');
+    btn.disabled = true; btn.textContent = 'Logging…';
+
+    try {
+      await db.collection('inventory').doc(id).update({
+        currentQuantity: firebase.firestore.FieldValue.increment(-qty),
+        lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      await logActivity('inventory_logged', `Used ${qty} ${item.unit} of ${item.name}`);
+      document.getElementById('inv-item').value = '';
+      document.getElementById('inv-qty').value  = '';
+      updateUnitHint();
+      showMsg('inv-msg', `Logged ${qty} ${item.unit} of ${item.name}`, 'success');
+    } catch {
+      showMsg('inv-msg', 'Failed to log. Try again.', 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Log Usage';
+    }
+  }
+
+  // ── Activity log ─────────────────────────────────────────────────────────────
+  async function logActivity(action, details) {
+    try {
+      await db.collection('activityLogs').add({
+        workerId:   currentUser.uid,
+        workerName: userData.workerName || currentUser.email,
+        action, details,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch { /* non-critical */ }
+  }
+</script>
+</body>
+</html>

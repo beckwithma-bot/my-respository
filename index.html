@@ -1,13 +1,106 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>TaskFlow</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>TaskFlow — Sign In</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="login-box">
+    <div class="login-logo">
+      <span style="font-size:2rem">⚡</span>
+      <span class="login-logo-text">TaskFlow</span>
+    </div>
+
+    <h2 class="login-title" id="page-title">Sign In</h2>
+    <div id="error-msg"   class="msg-error"  ></div>
+    <div id="reset-ok"    class="msg-success" >Reset email sent — check your inbox.</div>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div class="form-group" id="pass-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button type="submit" id="submit-btn" class="btn-accent" style="width:100%;margin-top:.25rem">
+        Sign In
+      </button>
+    </form>
+
+    <a class="login-link" id="reset-link">Forgot password?</a>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="app.js"></script>
+<script>
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db   = firebase.firestore();
+
+  // If already signed in, redirect immediately
+  auth.onAuthStateChanged(async user => {
+    if (!user) return;
+    const snap = await db.collection('users').doc(user.uid).get();
+    const role = snap.exists ? snap.data().role : 'worker';
+    location.href = role === 'owner' ? 'owner.html' : 'worker.html';
+  });
+
+  const form      = document.getElementById('login-form');
+  const emailEl   = document.getElementById('email');
+  const passEl    = document.getElementById('password');
+  const submitBtn = document.getElementById('submit-btn');
+  const errorDiv  = document.getElementById('error-msg');
+  const resetLink = document.getElementById('reset-link');
+  const resetOk   = document.getElementById('reset-ok');
+  const passGroup = document.getElementById('pass-group');
+  const titleEl   = document.getElementById('page-title');
+
+  let resetMode = false;
+
+  resetLink.addEventListener('click', () => {
+    resetMode = !resetMode;
+    titleEl.textContent    = resetMode ? 'Reset Password' : 'Sign In';
+    submitBtn.textContent  = resetMode ? 'Send Reset Email' : 'Sign In';
+    resetLink.textContent  = resetMode ? '← Back to login' : 'Forgot password?';
+    passGroup.style.display = resetMode ? 'none' : '';
+    passEl.required        = !resetMode;
+    errorDiv.style.display = 'none';
+    resetOk.style.display  = 'none';
+  });
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    errorDiv.style.display = 'none';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Please wait…';
+
+    try {
+      if (resetMode) {
+        await auth.sendPasswordResetEmail(emailEl.value.trim());
+        resetOk.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Reset Email';
+      } else {
+        await auth.signInWithEmailAndPassword(emailEl.value.trim(), passEl.value);
+        // onAuthStateChanged handles redirect
+      }
+    } catch (err) {
+      errorDiv.textContent   = friendlyAuthError(err.code);
+      errorDiv.style.display = 'block';
+      submitBtn.disabled     = false;
+      submitBtn.textContent  = resetMode ? 'Send Reset Email' : 'Sign In';
+    }
+  });
+</script>
+</body>
 </html>
