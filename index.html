@@ -1,13 +1,747 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React + TS</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>TaskFlow</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0e1a; --bg2: #111827; --bg3: #1a2235; --border: #1f2d45;
+  --accent: #a3e635; --text: #f0f4f8; --muted: #8899aa;
+  --red: #f87171; --yellow: #fbbf24; --blue: #60a5fa; --r: 10px;
+}
+html, body { min-height: 100%; background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+/* Buttons */
+button { cursor: pointer; border: none; border-radius: var(--r);
+  font-size: 1rem; font-weight: 600; font-family: inherit;
+  padding: .75rem 1.25rem; min-height: 48px;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: opacity .15s, transform .1s; }
+button:active:not(:disabled) { transform: scale(.97); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.btn-accent { background: var(--accent); color: #0a0e1a; }
+.btn-accent:hover:not(:disabled) { background: #b8f451; }
+.btn-ghost  { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.btn-ghost:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+.btn-sm { min-height: 36px; padding: .3rem .75rem; font-size: .85rem; }
+
+/* Forms */
+input, select, textarea {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r);
+  color: var(--text); font-size: 1rem; font-family: inherit;
+  padding: .75rem 1rem; width: 100%; outline: none;
+  transition: border-color .15s; min-height: 48px; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+select option { background: var(--bg3); }
+textarea { min-height: 80px; resize: vertical; }
+label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: .4rem; font-weight: 500; }
+.fg  { margin-bottom: .9rem; }
+.fr  { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+
+/* Badges */
+.badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px;
+  font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.badge-high         { background: rgba(248,113,113,.2);  color: var(--red);    }
+.badge-medium       { background: rgba(251,191,36,.2);   color: var(--yellow); }
+.badge-low          { background: rgba(96,165,250,.2);   color: var(--blue);   }
+.badge-pending      { background: rgba(136,153,170,.15); color: var(--muted);  }
+.badge-acknowledged { background: rgba(251,191,36,.2);   color: var(--yellow); }
+.badge-completed    { background: rgba(163,230,53,.2);   color: var(--accent); }
+
+/* Layout */
+.app-header {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 1rem 1.25rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.hdr-l { display: flex; align-items: center; gap: .75rem; }
+.hdr-r { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+.logo  { font-weight: 800; font-size: 1.2rem; color: var(--accent); }
+.owner-pill { background: rgba(163,230,53,.15); color: var(--accent);
+  border-radius: 6px; padding: .15rem .5rem; font-size: .7rem; font-weight: 700; text-transform: uppercase; }
+.main  { padding: 1.25rem; max-width: 900px; margin: 0 auto; width: 100%; }
+.wmain { max-width: 640px; }
+.sec-title { font-size: 1rem; font-weight: 700; margin-bottom: 1rem;
+  display: flex; align-items: center; gap: .5rem; }
+.cpill { background: var(--bg3); color: var(--muted); border-radius: 999px;
+  padding: .1rem .5rem; font-size: .78rem; font-weight: 600; }
+.sec-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem; }
+
+/* Tab nav */
+.tab-nav { display: flex; background: var(--bg2); border-bottom: 1px solid var(--border);
+  overflow-x: auto; position: sticky; top: 61px; z-index: 19; }
+.tab-btn { flex: 1; min-width: 80px; display: flex; flex-direction: column; align-items: center;
+  gap: .2rem; padding: .7rem .5rem; font-size: .75rem; font-weight: 600;
+  background: transparent; border-radius: 0; min-height: 0;
+  color: var(--muted); border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s; }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Task cards (worker) */
+.task-card { background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--r); margin-bottom: .75rem; }
+.task-card.overdue  { border-color: rgba(248,113,113,.5); }
+.task-card.done-card{ opacity: .75; border-color: rgba(163,230,53,.25); }
+.task-hdr { padding: 1rem 1.25rem; cursor: pointer;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; user-select: none; }
+.task-hdr:hover { background: rgba(255,255,255,.02); }
+.title-row { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-bottom: .2rem; }
+.ttitle { font-weight: 600; font-size: .95rem; }
+.tdue   { font-size: .78rem; color: var(--muted); }
+.tchev  { color: var(--muted); font-size: .75rem; flex-shrink: 0; margin-top: .25rem; }
+.task-body { display: none; padding: 0 1.25rem 1.25rem; border-top: 1px solid var(--border); }
+.task-body.open { display: block; }
+.task-body p { color: var(--muted); line-height: 1.6; padding-top: 1rem; margin-bottom: 1rem; }
+.task-acts { display: flex; gap: .75rem; flex-wrap: wrap; }
+.task-acts button { flex: 1; min-width: 120px; }
+.done-text { color: var(--accent); font-size: .88rem; }
+
+/* Task rows (owner) */
+.task-row { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
+  padding: .9rem 1.1rem; margin-bottom: .6rem;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.task-row.overdue { border-color: rgba(248,113,113,.5); }
+.task-row.faded   { opacity: .75; }
+.ri { flex: 1; min-width: 0; }
+.rn { font-weight: 600; font-size: .9rem; }
+.rm { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+.rb { display: flex; gap: .4rem; flex-shrink: 0; }
+
+/* Filters */
+.filter-row { display: flex; gap: .5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.fbtn { min-height: 34px; padding: .25rem .75rem; font-size: .82rem; text-transform: capitalize; }
+
+/* Performance */
+.perf-card { background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 1.1rem 1.25rem; margin-bottom: .75rem; }
+.perf-hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: .75rem; }
+.perf-name { font-weight: 700; } .perf-sub { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+.perf-pct  { font-size: 1.5rem; font-weight: 800; }
+.bar-bg  { height: 8px; background: var(--bg3); border-radius: 999px; overflow: hidden; margin-bottom: .75rem; }
+.bar-fill{ height: 100%; border-radius: 999px; transition: width .6s ease; }
+.stats-row { display: flex; gap: .5rem; justify-content: space-around; }
+.st { text-align: center; }
+.sv { font-weight: 700; font-size: 1.2rem; }
+.sl { font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+/* Inventory */
+.inv-row { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
+  padding: .9rem 1.1rem; margin-bottom: .6rem;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.inv-row.low-stock { border-color: rgba(248,113,113,.4); }
+.ii { flex: 1; min-width: 0; }
+.iname  { font-weight: 600; font-size: .9rem; }
+.imeta  { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+.iright { display: flex; flex-direction: column; align-items: flex-end; gap: .2rem; flex-shrink: 0; }
+.iqty   { font-weight: 700; font-size: 1rem; }
+.iqty.ok  { color: var(--accent); } .iqty.low { color: var(--red); }
+.ithresh{ font-size: .72rem; color: var(--muted); }
+.alert-banner { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.3);
+  color: var(--red); border-radius: 8px; padding: .7rem 1rem;
+  margin-bottom: 1rem; font-size: .9rem; font-weight: 600; }
+.shopping { background: var(--bg2); border: 1px solid rgba(251,191,36,.3);
+  border-radius: var(--r); padding: 1.25rem; margin-top: 1.5rem; }
+.shopping h3 { font-weight: 700; color: var(--yellow); margin-bottom: .75rem; }
+.shopping ul { padding-left: 1.25rem; }
+.shopping li { font-size: .9rem; margin-bottom: .4rem; }
+.sup { color: var(--muted); font-size: .85rem; }
+
+/* Messages */
+.msg-ok  { background: rgba(163,230,53,.1); border: 1px solid rgba(163,230,53,.3);
+  color: var(--accent); border-radius: 8px; padding: .6rem .9rem; font-size: .875rem; margin-bottom: .75rem; display: none; }
+.msg-err { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.3);
+  color: var(--red); border-radius: 8px; padding: .6rem .9rem; font-size: .875rem; margin-bottom: .75rem; display: none; }
+
+/* Modal */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75);
+  display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
+.overlay.hidden { display: none; }
+.modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+  width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+.mhdr { display: flex; align-items: center; justify-content: space-between;
+  padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); }
+.mhdr h3 { font-weight: 700; font-size: 1rem; }
+.mbody { padding: 1.25rem 1.5rem; }
+.mfoot { display: flex; gap: .75rem; margin-top: .5rem; }
+.mfoot button { flex: 1; }
+
+/* Login */
+.login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+.login-box  { width: 100%; max-width: 400px; background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; }
+.login-logo { display: flex; align-items: center; gap: .5rem; justify-content: center; margin-bottom: 1.75rem; }
+.login-logotext { font-size: 1.75rem; font-weight: 800; color: var(--accent); letter-spacing: -.03em; }
+.login-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 1.25rem; text-align: center; }
+.login-link  { display: block; text-align: center; margin-top: .75rem; font-size: .875rem; color: var(--muted); cursor: pointer; }
+.login-link:hover { color: var(--text); }
+
+/* Loading */
+.loading-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+.spinner { width: 32px; height: 32px; border: 3px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner-wrap { display: flex; justify-content: center; padding: 2rem; }
+.empty { text-align: center; color: var(--muted); padding: 3rem 1rem; }
+.empty-icon { font-size: 2.5rem; margin-bottom: .5rem; }
+* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+@media (max-width: 480px) { .fr { grid-template-columns: 1fr; } .main { padding: 1rem; } }
+</style>
+</head>
+<body>
+
+<!-- ══ LOADING ═══════════════════════════════════════════════════════════════ -->
+<div id="s-loading" class="loading-screen">
+  <div class="spinner"></div>
+</div>
+
+<!-- ══ LOGIN ══════════════════════════════════════════════════════════════════ -->
+<div id="s-login" style="display:none">
+  <div class="login-wrap">
+    <div class="login-box">
+      <div class="login-logo"><span style="font-size:2rem">⚡</span><span class="login-logotext">TaskFlow</span></div>
+      <h2 class="login-title" id="l-title">Sign In</h2>
+      <div id="l-err" class="msg-err"></div>
+      <div id="l-ok"  class="msg-ok">Reset email sent — check your inbox.</div>
+      <form id="l-form">
+        <div class="fg"><label>Email</label>
+          <input type="email" id="l-email" placeholder="you@example.com" required autocomplete="email"></div>
+        <div class="fg" id="l-passgrp"><label>Password</label>
+          <input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password"></div>
+        <button type="submit" id="l-btn" class="btn-accent" style="width:100%;margin-top:.25rem">Sign In</button>
+      </form>
+      <span class="login-link" id="l-reset">Forgot password?</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ WORKER ══════════════════════════════════════════════════════════════════ -->
+<div id="s-worker" style="display:none">
+  <header class="app-header">
+    <div>
+      <div style="font-weight:700;font-size:1.05rem" id="w-name"></div>
+      <div style="font-size:.78rem;color:var(--muted)" id="w-date"></div>
+    </div>
+    <button class="btn-ghost btn-sm" id="w-out">Sign out</button>
+  </header>
+  <main class="main wmain">
+    <section>
+      <h2 class="sec-title">Today's Tasks <span class="cpill" id="w-count">0</span></h2>
+      <div id="w-tasks"><div class="spinner-wrap"><div class="spinner"></div></div></div>
+    </section>
+    <section id="w-done-sec" style="display:none;margin-top:2rem">
+      <h2 class="sec-title" style="color:var(--muted)">Completed <span class="cpill" id="w-done-count">0</span></h2>
+      <div id="w-done"></div>
+    </section>
+    <section style="margin-top:2rem">
+      <div class="task-card">
+        <div class="task-hdr" onclick="toggleLogger()">
+          <span style="font-weight:700">📦 Log Inventory Usage</span>
+          <span class="tchev" id="log-chev">▼</span>
+        </div>
+        <div class="task-body" id="log-body">
+          <div id="inv-msg" class="msg-ok" style="margin-top:1rem"></div>
+          <form id="inv-form" style="margin-top:1rem">
+            <div class="fg"><label>Item</label>
+              <select id="inv-sel" required><option value="">Select an item…</option></select></div>
+            <div class="fg"><label>Quantity Used <span id="unit-hint" style="color:var(--muted)"></span></label>
+              <input type="number" id="inv-qty" placeholder="0" min="0.01" step="any" required></div>
+            <button type="submit" class="btn-accent" id="inv-btn" style="width:100%">Log Usage</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ══ OWNER ══════════════════════════════════════════════════════════════════ -->
+<div id="s-owner" style="display:none">
+  <header class="app-header">
+    <div class="hdr-l"><span class="logo">⚡ TaskFlow</span><span class="owner-pill">Owner</span></div>
+    <div class="hdr-r">
+      <button class="btn-accent btn-sm" id="o-new">+ New Task</button>
+      <button class="btn-ghost  btn-sm" id="o-out">Sign out</button>
+    </div>
+  </header>
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="active"><span>⚡</span>Active</button>
+    <button class="tab-btn" data-tab="completed"><span>✅</span>Done</button>
+    <button class="tab-btn" data-tab="team"><span>📊</span>Team</button>
+    <button class="tab-btn" data-tab="inventory"><span>📦</span>Stock</button>
+  </nav>
+  <main class="main">
+    <div id="o-active">
+      <div class="filter-row">
+        <button class="btn-accent fbtn" data-f="all">All</button>
+        <button class="btn-ghost  fbtn" data-f="pending">Pending</button>
+        <button class="btn-ghost  fbtn" data-f="acknowledged">Acknowledged</button>
+      </div>
+      <div id="o-alist"><div class="spinner-wrap"><div class="spinner"></div></div></div>
+    </div>
+    <div id="o-completed" style="display:none">
+      <div id="o-clist"><div class="spinner-wrap"><div class="spinner"></div></div></div>
+    </div>
+    <div id="o-team" style="display:none">
+      <div id="o-tlist"><div class="spinner-wrap"><div class="spinner"></div></div></div>
+    </div>
+    <div id="o-inventory" style="display:none">
+      <div id="o-ialert" class="alert-banner" style="display:none"></div>
+      <div class="sec-hdr">
+        <span style="font-weight:700">All Items</span>
+        <button class="btn-accent btn-sm" id="o-addinv">+ Add Item</button>
+      </div>
+      <div id="o-ilist"><div class="spinner-wrap"><div class="spinner"></div></div></div>
+      <div id="o-shop"></div>
+    </div>
+  </main>
+</div>
+
+<!-- ══ MODALS ═════════════════════════════════════════════════════════════════ -->
+<div class="overlay hidden" id="m-task">
+  <div class="modal">
+    <div class="mhdr"><h3>Create Task</h3><button class="btn-ghost btn-sm" onclick="cm('m-task')">✕</button></div>
+    <div class="mbody">
+      <form id="f-task">
+        <div class="fg"><label>Title</label><input id="t-title" required></div>
+        <div class="fg"><label>Description</label><textarea id="t-desc" placeholder="What needs to be done…"></textarea></div>
+        <div class="fr">
+          <div class="fg"><label>Assign To</label><select id="t-worker" required><option value="">Select worker…</option></select></div>
+          <div class="fg"><label>Priority</label>
+            <select id="t-pri"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></div>
+        </div>
+        <div class="fg"><label>Due Date &amp; Time</label><input type="datetime-local" id="t-due" required></div>
+        <div class="mfoot">
+          <button type="button" class="btn-ghost" onclick="cm('m-task')">Cancel</button>
+          <button type="submit" class="btn-accent" id="t-btn">Create Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="m-addinv">
+  <div class="modal">
+    <div class="mhdr"><h3>Add Item</h3><button class="btn-ghost btn-sm" onclick="cm('m-addinv')">✕</button></div>
+    <div class="mbody">
+      <form id="f-addinv">
+        <div class="fg"><label>Name</label><input id="ai-name" required></div>
+        <div class="fr">
+          <div class="fg"><label>Current Qty</label><input type="number" id="ai-qty" min="0" step="any" required></div>
+          <div class="fg"><label>Unit</label><input id="ai-unit" placeholder="lbs, boxes…" required></div>
+        </div>
+        <div class="fg"><label>Reorder Threshold</label><input type="number" id="ai-thr" min="0" step="any" required></div>
+        <div class="fg"><label>Supplier / Store</label><input id="ai-sup" placeholder="Optional"></div>
+        <div class="mfoot">
+          <button type="button" class="btn-ghost" onclick="cm('m-addinv')">Cancel</button>
+          <button type="submit" class="btn-accent">Add Item</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="m-editinv">
+  <div class="modal">
+    <div class="mhdr"><h3>Edit Item</h3><button class="btn-ghost btn-sm" onclick="cm('m-editinv')">✕</button></div>
+    <div class="mbody">
+      <form id="f-editinv">
+        <input type="hidden" id="ei-id">
+        <div class="fg"><label>Name</label><input id="ei-name" required></div>
+        <div class="fr">
+          <div class="fg"><label>Current Qty</label><input type="number" id="ei-qty" min="0" step="any" required></div>
+          <div class="fg"><label>Unit</label><input id="ei-unit" required></div>
+        </div>
+        <div class="fg"><label>Reorder Threshold</label><input type="number" id="ei-thr" min="0" step="any" required></div>
+        <div class="fg"><label>Supplier / Store</label><input id="ei-sup"></div>
+        <div class="mfoot">
+          <button type="button" class="btn-ghost" onclick="cm('m-editinv')">Cancel</button>
+          <button type="submit" class="btn-accent">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  PASTE YOUR 6 FIREBASE VALUES BELOW
+//  Firebase Console → Project Settings → Your apps → </> web app → firebaseConfig
+// ═══════════════════════════════════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey:            'PASTE_API_KEY',
+  authDomain:        'PASTE_PROJECT.firebaseapp.com',
+  projectId:         'PASTE_PROJECT_ID',
+  storageBucket:     'PASTE_PROJECT.appspot.com',
+  messagingSenderId: 'PASTE_SENDER_ID',
+  appId:             'PASTE_APP_ID',
+};
+// ═══════════════════════════════════════════════════════════════════════════════
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+const FS   = firebase.firestore.FieldValue;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let me = null, myData = null;
+let tasks = [], workers = [], inv = [];
+let tab = 'active', filt = 'all';
+let unsubT = null, unsubW = null, unsubI = null;
+let ready = null; // 'worker' | 'owner'
+const open = new Set(); // expanded task ids
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function esc(s) { const d = document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
+
+function fmt(v) {
+  if (!v) return '';
+  let d;
+  try { d = v.toDate ? v.toDate() : v.seconds ? new Date(v.seconds*1000) : new Date(v); } catch { return ''; }
+  return d.toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+function msg(id, text, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text; el.className = type==='ok' ? 'msg-ok' : 'msg-err'; el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3500);
+}
+
+function authErr(code) {
+  return ({'auth/user-not-found':'No account with that email.','auth/wrong-password':'Wrong password.',
+    'auth/invalid-email':'Invalid email.','auth/too-many-requests':'Too many attempts — try later.',
+    'auth/invalid-credential':'Invalid email or password.'})[code] || 'Something went wrong.';
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
+function show(name) {
+  ['loading','login','worker','owner'].forEach(s =>
+    document.getElementById('s-'+s).style.display = s===name ? '' : 'none');
+}
+
+function unsub() {
+  if (unsubT) { unsubT(); unsubT=null; }
+  if (unsubW) { unsubW(); unsubW=null; }
+  if (unsubI) { unsubI(); unsubI=null; }
+  tasks=[]; workers=[]; inv=[];
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+auth.onAuthStateChanged(async user => {
+  if (!user) { unsub(); ready=null; me=null; myData=null; show('login'); return; }
+  if (ready && me?.uid===user.uid) return;
+  me = user;
+  const snap = await db.collection('users').doc(user.uid).get();
+  if (!snap.exists) { auth.signOut(); return; }
+  myData = snap.data();
+  unsub();
+  if (myData.role==='owner') { ready='owner'; show('owner'); initOwner(); }
+  else                        { ready='worker'; show('worker'); initWorker(); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  LOGIN
+// ══════════════════════════════════════════════════════════════════════════════
+;(function() {
+  let resetMode = false;
+  const form=g('l-form'), eml=g('l-email'), pwd=g('l-pass'), btn=g('l-btn'),
+        err=g('l-err'), ok=g('l-ok'), lnk=g('l-reset'), pg=g('l-passgrp'), ttl=g('l-title');
+
+  lnk.onclick = () => {
+    resetMode = !resetMode;
+    ttl.textContent = resetMode ? 'Reset Password' : 'Sign In';
+    btn.textContent = resetMode ? 'Send Reset Email' : 'Sign In';
+    lnk.textContent = resetMode ? '← Back to login' : 'Forgot password?';
+    pg.style.display = resetMode ? 'none' : ''; pwd.required = !resetMode;
+    err.style.display = ok.style.display = 'none';
+  };
+
+  form.onsubmit = async e => {
+    e.preventDefault(); err.style.display='none'; btn.disabled=true; btn.textContent='Please wait…';
+    try {
+      if (resetMode) {
+        await auth.sendPasswordResetEmail(eml.value.trim());
+        ok.style.display='block'; btn.disabled=false; btn.textContent='Send Reset Email';
+      } else {
+        await auth.signInWithEmailAndPassword(eml.value.trim(), pwd.value);
+      }
+    } catch(ex) {
+      err.textContent=authErr(ex.code); err.style.display='block';
+      btn.disabled=false; btn.textContent=resetMode?'Send Reset Email':'Sign In';
+    }
+  };
+})();
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  WORKER
+// ══════════════════════════════════════════════════════════════════════════════
+function initWorker() {
+  g('w-name').textContent = myData.workerName || me.email;
+  g('w-date').textContent = new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
+  g('w-out').onclick = () => auth.signOut();
+
+  unsubT = db.collection('tasks').where('assignedWorker','==',me.uid).orderBy('dueDate','asc')
+    .onSnapshot(s => { tasks=s.docs.map(d=>({id:d.id,...d.data()})); renderWorker(); },
+      err => { g('w-tasks').innerHTML='<p style="color:var(--red);padding:1rem">Could not load tasks — check console for index setup link.</p>'; console.error(err); });
+
+  unsubI = db.collection('inventory').orderBy('name','asc').onSnapshot(s => {
+    inv=s.docs.map(d=>({id:d.id,...d.data()})); refreshDrop();
+  });
+
+  g('inv-form').onsubmit = invSubmit;
+  g('inv-sel').onchange  = unitHint;
+}
+
+function renderWorker() {
+  const now=new Date(), active=tasks.filter(t=>t.status!=='completed'), done=tasks.filter(t=>t.status==='completed');
+  g('w-count').textContent = active.length;
+  g('w-tasks').innerHTML = active.length
+    ? active.map(t=>wCard(t,now)).join('')
+    : '<div class="empty"><div class="empty-icon">✅</div>All caught up!</div>';
+  if (done.length) {
+    g('w-done-sec').style.display=''; g('w-done-count').textContent=done.length;
+    g('w-done').innerHTML=done.map(t=>wCard(t,now)).join('');
+  } else g('w-done-sec').style.display='none';
+}
+
+function wCard(t, now) {
+  const ov=t.status!=='completed'&&new Date(t.dueDate)<now, done=t.status==='completed', xp=open.has(t.id);
+  return `<div class="task-card ${ov?'overdue':''} ${done?'done-card':''}" data-id="${t.id}">
+    <div class="task-hdr" onclick="toggleT('${t.id}')">
+      <div style="flex:1;min-width:0">
+        <div class="title-row">
+          <span class="ttitle">${esc(t.title)}</span>
+          <span class="badge badge-${t.priority}">${t.priority}</span>
+          <span class="badge badge-${t.status}">${t.status}</span>
+          ${ov?'<span class="badge badge-high">overdue</span>':''}
+        </div>
+        <div class="tdue">Due: ${fmt(t.dueDate)}</div>
+      </div>
+      <span class="tchev">${xp?'▲':'▼'}</span>
+    </div>
+    <div class="task-body ${xp?'open':''}">
+      <p>${esc(t.description||'No description.')}</p>
+      <div class="task-acts">
+        ${t.status==='pending'?`<button class="btn-ghost" onclick="ack('${t.id}')">Acknowledge</button>`:''}
+        ${!done
+          ?`<button class="btn-accent" onclick="comp('${t.id}',\`${esc(t.title).replace(/`/g,'\\`')}\`)">Mark Complete</button>`
+          :`<span class="done-text">✓ Completed ${t.completedAt?fmt(t.completedAt):''}</span>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+function toggleT(id) { open.has(id)?open.delete(id):open.add(id); renderWorker(); }
+
+async function ack(id) {
+  const b=document.querySelector(`[data-id="${id}"] .btn-ghost`); if(b){b.disabled=true;b.textContent='…';}
+  await db.collection('tasks').doc(id).update({status:'acknowledged',acknowledgedAt:FS.serverTimestamp()});
+  await log('task_acknowledged','Acknowledged '+id);
+}
+async function comp(id, title) {
+  const b=document.querySelector(`[data-id="${id}"] .btn-accent`); if(b){b.disabled=true;b.textContent='…';}
+  await db.collection('tasks').doc(id).update({status:'completed',completedAt:FS.serverTimestamp()});
+  await log('task_completed','Completed: '+title);
+}
+
+function toggleLogger() {
+  const b=g('log-body'),c=g('log-chev'); b.classList.toggle('open'); c.textContent=b.classList.contains('open')?'▲':'▼';
+}
+function refreshDrop() {
+  const s=g('inv-sel'),p=s.value;
+  s.innerHTML='<option value="">Select an item…</option>'+inv.map(i=>`<option value="${i.id}">${esc(i.name)} (${i.currentQuantity} ${esc(i.unit)} left)</option>`).join('');
+  if(p) s.value=p; unitHint();
+}
+function unitHint() {
+  const i=inv.find(x=>x.id===g('inv-sel').value);
+  g('unit-hint').textContent=i?`(${i.unit})`:'';
+}
+async function invSubmit(e) {
+  e.preventDefault();
+  const id=g('inv-sel').value, qty=parseFloat(g('inv-qty').value), item=inv.find(i=>i.id===id);
+  if(!item||isNaN(qty)||qty<=0) return;
+  const btn=g('inv-btn'); btn.disabled=true; btn.textContent='Logging…';
+  try {
+    await db.collection('inventory').doc(id).update({currentQuantity:FS.increment(-qty),lastUpdated:FS.serverTimestamp()});
+    await log('inventory_logged',`Used ${qty} ${item.unit} of ${item.name}`);
+    g('inv-sel').value=''; g('inv-qty').value=''; unitHint();
+    msg('inv-msg',`Logged ${qty} ${item.unit} of ${item.name}`,'ok');
+  } catch { msg('inv-msg','Failed. Try again.','err'); }
+  finally { btn.disabled=false; btn.textContent='Log Usage'; }
+}
+async function log(action, details) {
+  try { await db.collection('activityLogs').add({workerId:me.uid,workerName:myData.workerName||me.email,action,details,timestamp:FS.serverTimestamp()}); } catch{}
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  OWNER
+// ══════════════════════════════════════════════════════════════════════════════
+function initOwner() {
+  g('o-out').onclick    = () => auth.signOut();
+  g('o-new').onclick    = () => om('m-task');
+  g('o-addinv').onclick = () => om('m-addinv');
+
+  document.querySelectorAll('.tab-btn').forEach(b => b.onclick=()=>switchTab(b.dataset.tab));
+  document.querySelectorAll('.fbtn').forEach(b => b.onclick=()=>{
+    filt=b.dataset.f;
+    document.querySelectorAll('.fbtn').forEach(x=>x.className=x.dataset.f===filt?'btn-accent fbtn':'btn-ghost fbtn');
+    renderActive();
+  });
+
+  g('f-task').onsubmit    = createTask;
+  g('f-addinv').onsubmit  = addInv;
+  g('f-editinv').onsubmit = editInv;
+  document.querySelectorAll('.overlay').forEach(el=>el.onclick=e=>{if(e.target===el)cm(el.id);});
+
+  unsubT = db.collection('tasks').orderBy('dueDate','asc').onSnapshot(s=>{tasks=s.docs.map(d=>({id:d.id,...d.data()}));refresh();});
+  unsubW = db.collection('workers').orderBy('name','asc').onSnapshot(s=>{workers=s.docs.map(d=>({id:d.id,...d.data()}));refWDrop();if(tab==='team')renderTeam();});
+  unsubI = db.collection('inventory').orderBy('name','asc').onSnapshot(s=>{inv=s.docs.map(d=>({id:d.id,...d.data()}));if(tab==='inventory')renderInv();});
+}
+
+function switchTab(t) {
+  tab=t;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
+  ['active','completed','team','inventory'].forEach(x=>g('o-'+x).style.display=x===t?'':'none');
+  refresh();
+}
+function refresh() {
+  if(tab==='active')    renderActive();
+  if(tab==='completed') renderComp();
+  if(tab==='team')      renderTeam();
+  if(tab==='inventory') renderInv();
+}
+
+function renderActive() {
+  const now=new Date();
+  let list=tasks.filter(t=>t.status!=='completed');
+  if(filt!=='all') list=list.filter(t=>t.status===filt);
+  g('o-alist').innerHTML=list.length?list.map(t=>oRow(t,now)).join(''):'<div class="empty">No active tasks.</div>';
+}
+function oRow(t,now) {
+  const ov=t.status!=='completed'&&new Date(t.dueDate)<now;
+  const wn=(workers.find(w=>w.id===t.assignedWorker)||{}).name||t.assignedWorker;
+  return `<div class="task-row ${ov?'overdue':''}">
+    <div class="ri"><div class="rn">${esc(t.title)}${ov?'<span class="badge badge-high" style="margin-left:.4rem">overdue</span>':''}</div>
+    <div class="rm">${esc(wn)} · Due ${fmt(t.dueDate)}</div></div>
+    <div class="rb"><span class="badge badge-${t.priority}">${t.priority}</span><span class="badge badge-${t.status}">${t.status}</span></div>
+  </div>`;
+}
+
+function renderComp() {
+  const done=tasks.filter(t=>t.status==='completed').sort((a,b)=>(b.completedAt?.seconds||0)-(a.completedAt?.seconds||0));
+  g('o-clist').innerHTML=done.length?done.map(t=>{
+    const wn=(workers.find(w=>w.id===t.assignedWorker)||{}).name||t.assignedWorker;
+    return `<div class="task-row faded">
+      <div class="ri"><div class="rn">${esc(t.title)}</div><div class="rm">${esc(wn)}${t.completedAt?' · Completed '+fmt(t.completedAt):''}</div></div>
+      <div class="rb"><span class="badge badge-${t.priority}">${t.priority}</span><span class="badge badge-completed">done</span></div>
+    </div>`;
+  }).join(''):'<div class="empty">No completed tasks yet.</div>';
+}
+
+function renderTeam() {
+  const now=new Date();
+  const stats=workers.map(w=>{
+    const wt=tasks.filter(t=>t.assignedWorker===w.id), done=wt.filter(t=>t.status==='completed').length;
+    const pct=wt.length?Math.round(done/wt.length*100):0;
+    return {name:w.name,total:wt.length,done,pct,
+      ack:wt.filter(t=>t.status==='acknowledged').length,
+      pend:wt.filter(t=>t.status==='pending').length,
+      over:wt.filter(t=>t.status!=='completed'&&new Date(t.dueDate)<now).length};
+  }).sort((a,b)=>b.pct-a.pct);
+  g('o-tlist').innerHTML=stats.length?stats.map(s=>{
+    const c=s.pct>=80?'var(--accent)':s.pct>=50?'var(--yellow)':'var(--red)';
+    return `<div class="perf-card">
+      <div class="perf-hdr"><div><div class="perf-name">${esc(s.name)}</div><div class="perf-sub">${s.done}/${s.total} completed</div></div>
+      <div class="perf-pct" style="color:${c}">${s.pct}%</div></div>
+      <div class="bar-bg"><div class="bar-fill" style="width:${s.pct}%;background:${c}"></div></div>
+      <div class="stats-row">
+        <div class="st"><div class="sv" style="color:var(--accent)">${s.done}</div><div class="sl">Done</div></div>
+        <div class="st"><div class="sv" style="color:var(--yellow)">${s.ack}</div><div class="sl">Ack'd</div></div>
+        <div class="st"><div class="sv" style="color:var(--muted)">${s.pend}</div><div class="sl">Pending</div></div>
+        ${s.over?`<div class="st"><div class="sv" style="color:var(--red)">${s.over}</div><div class="sl">Overdue</div></div>`:''}
+      </div>
+    </div>`;
+  }).join(''):'<div class="empty">No workers found.</div>';
+}
+
+function renderInv() {
+  const low=inv.filter(i=>i.currentQuantity<=i.reorderThreshold), ok=inv.filter(i=>i.currentQuantity>i.reorderThreshold);
+  const al=g('o-ialert'); al.style.display=low.length?'':'none';
+  if(low.length) al.textContent=`⚠️ ${low.length} item${low.length>1?'s':''} below reorder threshold`;
+  g('o-ilist').innerHTML=inv.length?[...low,...ok].map(item=>{
+    const isL=item.currentQuantity<=item.reorderThreshold;
+    const ed=JSON.stringify({id:item.id,name:item.name,qty:item.currentQuantity,unit:item.unit,threshold:item.reorderThreshold,supplier:item.supplierLocation||''});
+    return `<div class="inv-row ${isL?'low-stock':''}">
+      <div class="ii"><div class="iname">${esc(item.name)}</div>
+      <div class="imeta">${item.supplierLocation?'📍 '+esc(item.supplierLocation)+' · ':''}Updated ${new Date((item.lastUpdated?.seconds||0)*1000||Date.now()).toLocaleDateString()}</div></div>
+      <div class="iright">
+        <div class="iqty ${isL?'low':'ok'}">${item.currentQuantity} ${esc(item.unit)}</div>
+        <div class="ithresh">Reorder at ${item.reorderThreshold} ${esc(item.unit)}</div>
+        ${isL?'<span class="badge badge-high">reorder now</span>':''}
+      </div>
+      <button class="btn-ghost btn-sm" onclick='openEdit(${ed.replace(/'/g,"&#39;")})'>Edit</button>
+    </div>`;
+  }).join(''):'<div class="empty">No inventory items yet.</div>';
+  const sh=g('o-shop');
+  if(low.length) {
+    sh.innerHTML=`<div class="shopping"><h3>🛒 Shopping List</h3><ul>${low.map(i=>`<li><strong>${esc(i.name)}</strong> — need ~${Math.ceil(i.reorderThreshold*2-i.currentQuantity)} ${esc(i.unit)}${i.supplierLocation?`<span class="sup"> · ${esc(i.supplierLocation)}</span>`:''}</li>`).join('')}</ul></div>`;
+    sh.style.display='';
+  } else sh.style.display='none';
+}
+
+function refWDrop() {
+  const s=g('t-worker'),p=s.value;
+  s.innerHTML='<option value="">Select worker…</option>'+workers.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join('');
+  if(p) s.value=p;
+}
+
+async function createTask(e) {
+  e.preventDefault(); const btn=g('t-btn'); btn.disabled=true; btn.textContent='Creating…';
+  try {
+    await db.collection('tasks').add({title:g('t-title').value.trim(),description:g('t-desc').value.trim(),
+      assignedWorker:g('t-worker').value,priority:g('t-pri').value,dueDate:g('t-due').value,
+      status:'pending',createdAt:FS.serverTimestamp()});
+    e.target.reset(); cm('m-task');
+  } finally { btn.disabled=false; btn.textContent='Create Task'; }
+}
+
+async function addInv(e) {
+  e.preventDefault(); const btn=e.target.querySelector('[type=submit]'); btn.disabled=true; btn.textContent='Saving…';
+  try {
+    await db.collection('inventory').add({name:g('ai-name').value.trim(),currentQuantity:parseFloat(g('ai-qty').value),
+      unit:g('ai-unit').value.trim(),reorderThreshold:parseFloat(g('ai-thr').value),
+      supplierLocation:g('ai-sup').value.trim(),lastUpdated:FS.serverTimestamp()});
+    e.target.reset(); cm('m-addinv');
+  } finally { btn.disabled=false; btn.textContent='Add Item'; }
+}
+
+function openEdit(item) {
+  g('ei-id').value=item.id; g('ei-name').value=item.name; g('ei-qty').value=item.qty;
+  g('ei-unit').value=item.unit; g('ei-thr').value=item.threshold; g('ei-sup').value=item.supplier;
+  om('m-editinv');
+}
+async function editInv(e) {
+  e.preventDefault(); const btn=e.target.querySelector('[type=submit]'); btn.disabled=true; btn.textContent='Saving…';
+  try {
+    await db.collection('inventory').doc(g('ei-id').value).update({name:g('ei-name').value.trim(),
+      currentQuantity:parseFloat(g('ei-qty').value),unit:g('ei-unit').value.trim(),
+      reorderThreshold:parseFloat(g('ei-thr').value),supplierLocation:g('ei-sup').value.trim(),
+      lastUpdated:FS.serverTimestamp()});
+    cm('m-editinv');
+  } finally { btn.disabled=false; btn.textContent='Save Changes'; }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function g(id) { return document.getElementById(id); }
+function om(id) { g(id).classList.remove('hidden'); }
+function cm(id) { g(id).classList.add('hidden'); }
+</script>
+</body>
 </html>
